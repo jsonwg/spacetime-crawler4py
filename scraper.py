@@ -1,5 +1,6 @@
 import re
-from urllib.parse import urlparse
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse, urljoin
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -15,7 +16,20 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
-    return list()
+    links = []
+    if resp.status != 200 or not resp.raw_response:
+        return links
+
+    try:
+        soup = BeautifulSoup(resp.raw_response.content, "html.parser")
+        for anchor in soup.find_all("a", href=True):
+            link = anchor.get("href")
+            final_url = urljoin(url, link)
+            links.append(final_url)
+    except Exception as e:
+        print("Error parsing page:", e)
+
+    return links
 
 def is_valid(url):
     # Decide whether to crawl this url or not. 
@@ -23,7 +37,10 @@ def is_valid(url):
     # There are already some conditions that return False.
     try:
         parsed = urlparse(url)
+        scrapable_domains = (".ics.uci.edu", ".cs.uci.edu", ".informatics.uci.edu", ".stat.uci.edu")
         if parsed.scheme not in set(["http", "https"]):
+            return False
+        if not any(parsed.netloc == domain[1:] or parsed.netloc.endswith(domain) for domain in scrapable_domains):
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
